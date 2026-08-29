@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     supabase_service_role_key: str
     storage_bucket: str = "evidence"
 
+    ai_api_key: str
+    ai_model: str = "gemini-3.5-flash-lite"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -74,7 +74,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
       throw new Error(data.detail ?? "Unable to save profile.");
     }
 
-    setStatus(`Profile created for ${data.full_name}.`);
+    window.location.href = "/evidence";
   } catch (error) {
     setStatus(
       error instanceof Error
