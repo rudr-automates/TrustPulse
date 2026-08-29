@@ -132,6 +132,36 @@ Each evidence item can have validation findings.
 - contradiction_detected
 - corroboration_count
 - validation_notes
+- authenticity_status
+- manipulation_indicators
+- authenticity_confidence
+
+### Authenticity Assessment
+
+The MVP evaluates whether a submitted document shows signs of editing, manipulation, or AI-generated content.
+
+This is an assessment, not forensic or legal authentication.
+
+### Possible Results
+
+#### No significant indicators detected
+
+The system did not identify meaningful signs of manipulation.
+
+#### Potential manipulation detected
+
+The system identified one or more suspicious indicators.
+
+#### Inconclusive
+
+The available evidence is insufficient to make a confident authenticity assessment.
+
+### Rules
+
+- Never claim guaranteed authenticity.
+- Never automatically classify an inconclusive document as fraudulent.
+- Authenticity assessment must contribute to evidence confidence.
+- Authenticity assessment must not directly determine Trust Score.
 
 Validation findings affect confidence and signal quality.
 

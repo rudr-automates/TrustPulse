@@ -196,9 +196,11 @@ Document ingestion
     ↓
 OCR / text extraction
     ↓
-Information extraction
+AI document understanding
     ↓
-Structured evidence
+Structured extraction
+    ↓
+Authenticity / integrity assessment
     ↓
 Validation
     ↓
@@ -220,9 +222,25 @@ Recommendations
     ↓
 Decision Card
 
-OCR and document-processing dependencies must be deployable in the eventual cloud environment.
+### Authenticity Assessment
 
-No hardcoded machine-specific executable paths are permitted.
+The MVP includes a limited document authenticity assessment.
+
+Purpose:
+
+Identify signs that a submitted document may have been edited, manipulated, or AI-generated.
+
+The system may return:
+
+- no significant manipulation indicators detected
+- potential manipulation detected
+- authenticity could not be determined confidently
+
+The system must NOT claim guaranteed forensic or legal authentication.
+
+Official issuer verification would require authorized access to external government, bank, MFI, or other institutional verification systems.
+
+AI contributes to authenticity assessment, but the final evidence confidence is determined by the broader validation and corroboration pipeline.
 
 ---
 
