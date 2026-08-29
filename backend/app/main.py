@@ -1,0 +1,14 @@
+from fastapi import FastAPI
+
+app = FastAPI(
+    title="TrustPulse API",
+    version="0.1.0",
+)
+
+
+@app.get("/health")
+def health_check() -> dict[str, str]:
+    return {
+        "status": "ok",
+        "service": "trustpulse-api",
+    }
