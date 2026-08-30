@@ -16,6 +16,9 @@ from backend.app.api.routes.scoring import (
 from backend.app.api.routes.resume import (
     router as resume_router,
 )
+from backend.app.api.routes.decision_card import (
+    router as decision_card_router,
+)
 
 
 app = FastAPI(
@@ -76,5 +79,10 @@ app.include_router(
 
 app.include_router(
     resume_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    decision_card_router,
     prefix="/api/v1",
 )
