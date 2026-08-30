@@ -7,6 +7,9 @@ from backend.app.api.routes.profile import router as profile_router
 from backend.app.api.routes.triangulation import (
     router as triangulation_router,
 )
+from backend.app.api.routes.signals import (
+    router as signals_router,
+)
 
 
 app = FastAPI(
@@ -52,5 +55,9 @@ app.include_router(
 
 app.include_router(
     triangulation_router,
+    prefix="/api/v1",
+)
+app.include_router(
+    signals_router,
     prefix="/api/v1",
 )
