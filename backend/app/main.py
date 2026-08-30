@@ -10,6 +10,9 @@ from backend.app.api.routes.triangulation import (
 from backend.app.api.routes.signals import (
     router as signals_router,
 )
+from backend.app.api.routes.scoring import (
+    router as scoring_router,
+)
 
 
 app = FastAPI(
@@ -57,7 +60,13 @@ app.include_router(
     triangulation_router,
     prefix="/api/v1",
 )
+
 app.include_router(
     signals_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    scoring_router,
     prefix="/api/v1",
 )
