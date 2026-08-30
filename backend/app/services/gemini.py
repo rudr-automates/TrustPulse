@@ -81,14 +81,73 @@ Analyze this document and return JSON using exactly this structure:
   }
 }
 
-Rules:
+FACT EXTRACTION RULES:
 
-- Only use facts explicitly visible in the document.
-- Use null when information is not available.
-- Do not guess.
-- Confidence must be between 0 and 100.
-- Keep indicators concise and evidence-based.
-- Do not make legal or forensic authentication claims.
+- Extract only information explicitly visible in the document.
+- Never invent missing information.
+- Use null when a value is not visible or cannot be determined.
+- Preserve numeric amounts accurately.
+- Preserve dates as they appear when possible.
+- Do not infer facts that are not explicitly supported.
+
+AUTHENTICITY ASSESSMENT:
+
+Assess whether the document shows visible or structural signs that it may have
+been edited, manipulated, or generated.
+
+Consider signals such as:
+
+1. Visual/layout inconsistencies
+   - unusual spacing
+   - inconsistent alignment
+   - suspiciously different typography
+   - mismatched visual regions
+
+2. Text/image inconsistencies
+   - text that appears overlaid differently from surrounding content
+   - inconsistent rendering
+   - suspicious image/text boundaries
+
+3. Internal document inconsistencies
+   - conflicting dates
+   - conflicting names
+   - conflicting amounts
+   - impossible sequences
+
+4. Suspicious manipulation indicators
+   - apparent alteration of important values
+   - suspicious replacement of text
+   - duplicated visual elements
+   - unnatural compositing
+
+5. AI-generation/editing indicators
+   - obvious synthetic-looking regions
+   - inconsistent rendering patterns
+   - visual artifacts that may suggest generated or heavily edited content
+
+IMPORTANT:
+
+- Do not claim that a document is definitely genuine.
+- Do not claim that a document is definitely fake.
+- Do not claim forensic authentication.
+- Do not claim legal authentication.
+- A lack of visible indicators does NOT prove authenticity.
+- Use "no_significant_indicators" only when the document appears internally
+  consistent and no meaningful manipulation indicators are visible.
+- Use "potential_manipulation" when one or more meaningful suspicious indicators
+  are present.
+- Use "inconclusive" when the available document quality or information is
+  insufficient to assess confidently.
+
+CONFIDENCE:
+
+Return a confidence from 0 to 100 representing how strongly the available
+document evidence supports the authenticity assessment.
+
+INDICATORS:
+
+Return concise, concrete observations only.
+Do not return generic statements such as "the document looks real."
 """
 
     try:

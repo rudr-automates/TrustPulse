@@ -160,11 +160,13 @@ def validate_analysis(
             "The extracted amount is invalid."
         )
 
-    authenticity_status = analysis.authenticity.status
-
-    manipulation_indicators = (
-        analysis.authenticity.indicators
+    authenticity_status, authenticity_confidence, manipulation_indicators = (
+    normalize_authenticity(
+        status=analysis.authenticity.status,
+        confidence=analysis.authenticity.confidence,
+        indicators=analysis.authenticity.indicators,
     )
+)
 
     if authenticity_status == "potential_manipulation":
         contradictions.append(
@@ -202,5 +204,38 @@ def validate_analysis(
         "validation_notes": " ".join(notes),
         "authenticity_status": authenticity_status,
         "manipulation_indicators": manipulation_indicators,
-        "authenticity_confidence": analysis.authenticity.confidence,
+        "authenticity_confidence": authenticity_confidence,
     }
+
+
+def normalize_authenticity(
+    status: str,
+    confidence: float,
+    indicators: list[str],
+) -> tuple[str, float, list[str]]:
+    valid_statuses = {
+        "no_significant_indicators",
+        "potential_manipulation",
+        "inconclusive",
+    }
+
+    if status not in valid_statuses:
+        status = "inconclusive"
+
+    confidence = max(0.0, min(100.0, float(confidence)))
+
+    cleaned_indicators = [
+        str(item).strip()
+        for item in indicators
+        if str(item).strip()
+    ]
+
+    if status == "potential_manipulation" and not cleaned_indicators:
+        cleaned_indicators = [
+            "Potential manipulation was flagged, but no specific indicator was returned."
+        ]
+
+    if status == "no_significant_indicators" and cleaned_indicators:
+        status = "potential_manipulation"
+
+    return status, confidence, cleaned_indicators

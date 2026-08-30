@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.routes.analysis import router as analysis_router
 from backend.app.api.routes.evidence import router as evidence_router
 from backend.app.api.routes.profile import router as profile_router
+from backend.app.api.routes.triangulation import (
+    router as triangulation_router,
+)
 
 
 app = FastAPI(
@@ -44,5 +47,10 @@ app.include_router(
 
 app.include_router(
     analysis_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    triangulation_router,
     prefix="/api/v1",
 )
