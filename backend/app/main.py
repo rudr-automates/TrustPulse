@@ -13,6 +13,9 @@ from backend.app.api.routes.signals import (
 from backend.app.api.routes.scoring import (
     router as scoring_router,
 )
+from backend.app.api.routes.resume import (
+    router as resume_router,
+)
 
 
 app = FastAPI(
@@ -68,5 +71,10 @@ app.include_router(
 
 app.include_router(
     scoring_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    resume_router,
     prefix="/api/v1",
 )
