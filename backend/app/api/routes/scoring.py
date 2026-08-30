@@ -5,8 +5,15 @@ from backend.app.services.confidence import calculate_confidence
 from backend.app.services.explainability import (
     build_explanation_package,
 )
-from backend.app.services.scoring import calculate_assessment
-from backend.app.services.supabase import get_supabase_client
+from backend.app.services.recommendations import (
+    build_recommendations,
+)
+from backend.app.services.scoring import (
+    calculate_assessment,
+)
+from backend.app.services.supabase import (
+    get_supabase_client,
+)
 
 
 router = APIRouter(
@@ -29,7 +36,10 @@ def calculate_trust(
         supabase
         .table("profiles")
         .select("id")
-        .eq("auth_user_id", str(user.id))
+        .eq(
+            "auth_user_id",
+            str(user.id),
+        )
         .limit(1)
         .execute()
     )
@@ -50,7 +60,10 @@ def calculate_trust(
         supabase
         .table("financial_signals")
         .select("*")
-        .eq("profile_id", profile_id)
+        .eq(
+            "profile_id",
+            profile_id,
+        )
         .execute()
     )
 
@@ -70,6 +83,18 @@ def calculate_trust(
             "uncertainties": [
                 "No financial evidence has been analyzed yet."
             ],
+            "recommendations": [
+                {
+                    "recommendation_type": "add_evidence",
+                    "title": "Add financial evidence",
+                    "description": (
+                        "Upload financial records so TrustPulse can "
+                        "begin building your Financial Resume."
+                    ),
+                    "priority": "high",
+                    "source_dimension": None,
+                }
+            ],
             "explanation": (
                 "TrustPulse cannot produce a meaningful assessment "
                 "until financial evidence is available."
@@ -86,7 +111,7 @@ def calculate_trust(
     )
 
     # ---------------------------------------------------------
-    # 4. Determine evidence IDs represented by signals
+    # 4. Determine evidence IDs
     # ---------------------------------------------------------
 
     evidence_ids: list[str] = []
@@ -111,7 +136,10 @@ def calculate_trust(
             supabase
             .table("validation_results")
             .select("*")
-            .in_("evidence_id", evidence_ids)
+            .in_(
+                "evidence_id",
+                evidence_ids,
+            )
             .execute()
         )
 
@@ -120,7 +148,7 @@ def calculate_trust(
         )
 
     # ---------------------------------------------------------
-    # 6. Calculate corroboration counts
+    # 6. Calculate corroboration
     # ---------------------------------------------------------
 
     corroboration_by_evidence = {
@@ -186,7 +214,7 @@ def calculate_trust(
     ]
 
     # ---------------------------------------------------------
-    # 8. Build explainability package
+    # 8. Build explanation
     # ---------------------------------------------------------
 
     explanation = build_explanation_package(
@@ -203,7 +231,41 @@ def calculate_trust(
     )
 
     # ---------------------------------------------------------
-    # 9. Persist complete assessment
+    # 9. Build recommendations
+    # ---------------------------------------------------------
+
+    recommendations = build_recommendations(
+        dimension_scores=assessment[
+            "dimension_scores"
+        ],
+        confidence_score=confidence_score,
+        validation_results=validation_results,
+    )
+
+    # ---------------------------------------------------------
+    # 10. Persist recommendations
+    # ---------------------------------------------------------
+
+    supabase.table("recommendations").delete().eq(
+        "profile_id",
+        profile_id,
+    ).execute()
+
+    if recommendations:
+        recommendation_rows = [
+            {
+                **recommendation,
+                "profile_id": profile_id,
+            }
+            for recommendation in recommendations
+        ]
+
+        supabase.table("recommendations").insert(
+            recommendation_rows
+        ).execute()
+
+    # ---------------------------------------------------------
+    # 11. Persist complete assessment
     # ---------------------------------------------------------
 
     result = (
@@ -241,7 +303,7 @@ def calculate_trust(
         )
 
     # ---------------------------------------------------------
-    # 10. Return complete borrower-facing assessment
+    # 12. Return complete assessment
     # ---------------------------------------------------------
 
     return {
@@ -256,6 +318,7 @@ def calculate_trust(
         "uncertainties": explanation[
             "uncertainties"
         ],
+        "recommendations": recommendations,
         "explanation": explanation[
             "explanation"
         ],
