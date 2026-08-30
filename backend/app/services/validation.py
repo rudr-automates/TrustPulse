@@ -25,6 +25,7 @@ def names_consistent(
     profile_tokens = set(
         normalize_text(profile_name).split()
     )
+
     extracted_tokens = set(
         normalize_text(extracted_name).split()
     )
@@ -37,11 +38,16 @@ def names_consistent(
     ):
         return True
 
-    overlap = profile_tokens.intersection(extracted_tokens)
+    overlap = profile_tokens.intersection(
+        extracted_tokens
+    )
 
     return len(overlap) >= max(
         1,
-        min(len(profile_tokens), len(extracted_tokens)),
+        min(
+            len(profile_tokens),
+            len(extracted_tokens),
+        ),
     )
 
 
@@ -110,13 +116,66 @@ def expected_missing_fields(
         ],
     }
 
-    for field in requirements.get(category, []):
-        value = getattr(facts, field, None)
+    for field in requirements.get(
+        category,
+        [],
+    ):
+        value = getattr(
+            facts,
+            field,
+            None,
+        )
 
         if value is None:
             missing.append(field)
 
     return missing
+
+
+def normalize_authenticity(
+    status: str,
+    confidence: float,
+    indicators: list[str],
+) -> tuple[str, float, list[str]]:
+    valid_statuses = {
+        "no_significant_indicators",
+        "potential_manipulation",
+        "inconclusive",
+    }
+
+    if status not in valid_statuses:
+        status = "inconclusive"
+
+    confidence = max(
+        0.0,
+        min(100.0, float(confidence)),
+    )
+
+    cleaned_indicators = [
+        str(item).strip()
+        for item in indicators
+        if str(item).strip()
+    ]
+
+    if (
+        status == "potential_manipulation"
+        and not cleaned_indicators
+    ):
+        cleaned_indicators = [
+            "Potential manipulation was flagged, but no specific indicator was returned."
+        ]
+
+    if (
+        status == "no_significant_indicators"
+        and cleaned_indicators
+    ):
+        status = "potential_manipulation"
+
+    return (
+        status,
+        confidence,
+        cleaned_indicators,
+    )
 
 
 def validate_analysis(
@@ -143,6 +202,14 @@ def validate_analysis(
         analysis,
     )
 
+    # ---------------------------------------------------------
+    # IMPORTANT:
+    # These are actual financial/document consistency
+    # problems only.
+    #
+    # Authenticity concerns are handled separately below.
+    # ---------------------------------------------------------
+
     contradictions: list[str] = []
 
     if name_consistency is False:
@@ -160,25 +227,24 @@ def validate_analysis(
             "The extracted amount is invalid."
         )
 
-    authenticity_status, authenticity_confidence, manipulation_indicators = (
-    normalize_authenticity(
+    contradiction_detected = (
+        len(contradictions) > 0
+    )
+
+    # ---------------------------------------------------------
+    # Authenticity is a separate dimension.
+    # It must NOT automatically become a contradiction.
+    # ---------------------------------------------------------
+
+    (
+        authenticity_status,
+        authenticity_confidence,
+        manipulation_indicators,
+    ) = normalize_authenticity(
         status=analysis.authenticity.status,
         confidence=analysis.authenticity.confidence,
         indicators=analysis.authenticity.indicators,
     )
-)
-
-    if authenticity_status == "potential_manipulation":
-        contradictions.append(
-            "Potential document manipulation indicators were identified by the AI analysis."
-        )
-
-    if authenticity_status == "inconclusive":
-        contradictions.append(
-            "Document authenticity could not be determined confidently."
-        )
-
-    contradiction_detected = len(contradictions) > 0
 
     notes: list[str] = []
 
@@ -187,9 +253,23 @@ def validate_analysis(
             "Some expected information was not available in the extracted document."
         )
 
-    if not contradictions:
+    if contradiction_detected:
         notes.append(
-            "No deterministic validation contradiction was identified."
+            "One or more deterministic consistency checks identified an issue."
+        )
+    else:
+        notes.append(
+            "No deterministic financial/document consistency contradiction was identified."
+        )
+
+    if authenticity_status == "potential_manipulation":
+        notes.append(
+            "The authenticity assessment identified potential manipulation indicators."
+        )
+
+    elif authenticity_status == "inconclusive":
+        notes.append(
+            "The authenticity assessment was inconclusive."
         )
 
     return {
@@ -206,36 +286,3 @@ def validate_analysis(
         "manipulation_indicators": manipulation_indicators,
         "authenticity_confidence": authenticity_confidence,
     }
-
-
-def normalize_authenticity(
-    status: str,
-    confidence: float,
-    indicators: list[str],
-) -> tuple[str, float, list[str]]:
-    valid_statuses = {
-        "no_significant_indicators",
-        "potential_manipulation",
-        "inconclusive",
-    }
-
-    if status not in valid_statuses:
-        status = "inconclusive"
-
-    confidence = max(0.0, min(100.0, float(confidence)))
-
-    cleaned_indicators = [
-        str(item).strip()
-        for item in indicators
-        if str(item).strip()
-    ]
-
-    if status == "potential_manipulation" and not cleaned_indicators:
-        cleaned_indicators = [
-            "Potential manipulation was flagged, but no specific indicator was returned."
-        ]
-
-    if status == "no_significant_indicators" and cleaned_indicators:
-        status = "potential_manipulation"
-
-    return status, confidence, cleaned_indicators
