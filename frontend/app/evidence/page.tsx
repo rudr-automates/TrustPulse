@@ -92,6 +92,9 @@ export default function EvidencePage() {
     null,
   );
 
+  const [isBuildingResume, setIsBuildingResume] =
+    useState(false);
+
   async function getSession() {
     const {
       data: { session },
@@ -259,7 +262,9 @@ export default function EvidencePage() {
       }
 
       setEvidence((current) =>
-        current.filter((item) => item.id !== evidenceId),
+        current.filter(
+          (item) => item.id !== evidenceId,
+        ),
       );
 
       setStatus("Evidence deleted.");
@@ -274,9 +279,219 @@ export default function EvidencePage() {
     }
   }
 
+  async function buildResume() {
+    setIsBuildingResume(true);
+    setStatus(
+      "Preparing your Financial Resume...",
+    );
+
+    try {
+      const session = await getSession();
+
+      if (!session) {
+        return;
+      }
+
+      const token = session.access_token;
+
+      // -----------------------------------------------------
+      // 1. Load all evidence
+      // -----------------------------------------------------
+
+      const evidenceResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/evidence`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const evidenceData =
+        await evidenceResponse.json();
+
+      if (!evidenceResponse.ok) {
+        throw new Error(
+          evidenceData.detail ??
+            "Unable to load evidence.",
+        );
+      }
+
+      const evidenceItems: EvidenceItem[] =
+        evidenceData;
+
+      if (evidenceItems.length === 0) {
+        throw new Error(
+          "Add at least one evidence document before building your Financial Resume.",
+        );
+      }
+
+      // -----------------------------------------------------
+      // 2. Analyze every evidence item
+      // -----------------------------------------------------
+
+      for (const item of evidenceItems) {
+        setStatus(
+          `Analyzing ${item.original_filename}...`,
+        );
+
+        const analysisResponse =
+          await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/evidence/${item.id}/analyze`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+
+        const analysisData =
+          await analysisResponse.json();
+
+        if (!analysisResponse.ok) {
+          throw new Error(
+            analysisData.detail ??
+              `Unable to analyze ${item.original_filename}.`,
+          );
+        }
+      }
+
+      // -----------------------------------------------------
+      // 3. Triangulate evidence
+      // -----------------------------------------------------
+
+      setStatus(
+        "Comparing evidence across your financial records...",
+      );
+
+      const triangulationResponse =
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/evidence/triangulate`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+      const triangulationData =
+        await triangulationResponse.json();
+
+      if (!triangulationResponse.ok) {
+        throw new Error(
+          triangulationData.detail ??
+            "Unable to triangulate evidence.",
+        );
+      }
+
+      // -----------------------------------------------------
+      // 4. Generate financial signals
+      // -----------------------------------------------------
+
+      setStatus(
+        "Generating financial signals...",
+      );
+
+      const signalsResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/evidence/generate-signals`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const signalsData =
+        await signalsResponse.json();
+
+      if (!signalsResponse.ok) {
+        throw new Error(
+          signalsData.detail ??
+            "Unable to generate financial signals.",
+        );
+      }
+
+      // -----------------------------------------------------
+      // 5. Calculate Trust + Confidence
+      // -----------------------------------------------------
+
+      setStatus(
+        "Calculating your Trust and Confidence...",
+      );
+
+      const trustResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/trust/calculate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const trustData =
+        await trustResponse.json();
+
+      if (!trustResponse.ok) {
+        throw new Error(
+          trustData.detail ??
+            "Unable to calculate Trust.",
+        );
+      }
+
+      // -----------------------------------------------------
+      // 6. Generate Financial Resume
+      // -----------------------------------------------------
+
+      setStatus(
+        "Building your Financial Resume...",
+      );
+
+      const resumeResponse =
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/resume/generate`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+      const resumeData =
+        await resumeResponse.json();
+
+      if (!resumeResponse.ok) {
+        throw new Error(
+          resumeData.detail ??
+            "Unable to generate Financial Resume.",
+        );
+      }
+
+      // -----------------------------------------------------
+      // 7. Open the completed Resume
+      // -----------------------------------------------------
+
+      window.location.href = "/resume";
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while building your Financial Resume.",
+      );
+    } finally {
+      setIsBuildingResume(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f8f5ec] px-6 py-10">
       <div className="mx-auto max-w-5xl">
+        {/* Header */}
+
         <div className="mb-8">
           <p className="text-sm font-semibold text-green-700">
             02 · Evidence Vault
@@ -288,10 +503,12 @@ export default function EvidencePage() {
 
           <p className="mt-3 max-w-2xl text-gray-600">
             Add legitimate records from your financial life.
-            These records help TrustPulse build a clearer financial
-            identity.
+            These records help TrustPulse build a clearer
+            financial identity.
           </p>
         </div>
+
+        {/* Upload + Evidence */}
 
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <form
@@ -310,7 +527,11 @@ export default function EvidencePage() {
                     event.target.value as EvidenceCategory,
                   )
                 }
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-green-600"
+                disabled={
+                  isUploading ||
+                  isBuildingResume
+                }
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-green-600 disabled:cursor-not-allowed disabled:bg-gray-50"
               >
                 {categories.map((item) => (
                   <option
@@ -325,7 +546,8 @@ export default function EvidencePage() {
               <p className="mt-2 text-sm text-gray-500">
                 {
                   categories.find(
-                    (item) => item.value === category,
+                    (item) =>
+                      item.value === category,
                   )?.description
                 }
               </p>
@@ -344,11 +566,16 @@ export default function EvidencePage() {
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.docx"
                 onChange={handleFileChange}
-                className="block w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900"
+                disabled={
+                  isUploading ||
+                  isBuildingResume
+                }
+                className="block w-full rounded-xl border border-gray-300 bg-white p-3 text-sm text-gray-900 disabled:cursor-not-allowed disabled:bg-gray-50"
               />
 
               <p className="mt-2 text-xs text-gray-500">
-                Supported: PDF, JPG, JPEG, PNG, DOCX · Maximum 6 MB
+                Supported: PDF, JPG, JPEG, PNG, DOCX ·
+                Maximum 6 MB
               </p>
             </div>
 
@@ -366,7 +593,10 @@ export default function EvidencePage() {
 
             <button
               type="submit"
-              disabled={isUploading}
+              disabled={
+                isUploading ||
+                isBuildingResume
+              }
               className="mt-6 w-full rounded-xl bg-green-700 px-6 py-3 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isUploading
@@ -406,7 +636,8 @@ export default function EvidencePage() {
                   </p>
 
                   <p className="mt-1 text-sm text-gray-500">
-                    Your first uploaded document will appear here.
+                    Your first uploaded document will
+                    appear here.
                   </p>
                 </div>
               ) : (
@@ -422,7 +653,10 @@ export default function EvidencePage() {
                         </p>
 
                         <p className="mt-1 text-sm capitalize text-gray-500">
-                          {item.category.replace("_", " ")}
+                          {item.category.replace(
+                            "_",
+                            " ",
+                          )}
                         </p>
                       </div>
 
@@ -436,7 +670,10 @@ export default function EvidencePage() {
                       onClick={() =>
                         handleDelete(item.id)
                       }
-                      disabled={deletingId === item.id}
+                      disabled={
+                        deletingId === item.id ||
+                        isBuildingResume
+                      }
                       className="mt-4 text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
                     >
                       {deletingId === item.id
@@ -447,8 +684,35 @@ export default function EvidencePage() {
                 ))
               )}
             </div>
+
+            {/* Build Financial Resume */}
+
+            <div className="mt-8 border-t border-gray-200 pt-6">
+              <button
+                type="button"
+                onClick={buildResume}
+                disabled={
+                  isBuildingResume ||
+                  isUploading ||
+                  evidence.length === 0
+                }
+                className="w-full rounded-xl bg-green-700 px-6 py-4 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBuildingResume
+                  ? "Building Financial Resume..."
+                  : "Build My Financial Resume →"}
+              </button>
+
+              <p className="mt-3 text-center text-xs leading-5 text-gray-500">
+                TrustPulse will analyze, validate and compare
+                your available evidence before generating
+                your assessment.
+              </p>
+            </div>
           </section>
         </div>
+
+        {/* Authenticity note */}
 
         <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-5">
           <p className="text-sm font-medium text-gray-900">
@@ -456,11 +720,12 @@ export default function EvidencePage() {
           </p>
 
           <p className="mt-1 text-sm leading-6 text-gray-600">
-            TrustPulse will assess submitted documents for signs of
-            manipulation or AI-generated/edited content. This does not
-            provide forensic or legal authentication. Official issuer
-            verification would require authorized external
-            institutional access.
+            TrustPulse will assess submitted documents for
+            signs of manipulation or AI-generated/edited
+            content. This does not provide forensic or legal
+            authentication. Official issuer verification
+            would require authorized external institutional
+            access.
           </p>
         </div>
       </div>
