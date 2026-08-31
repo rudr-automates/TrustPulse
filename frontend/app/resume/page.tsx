@@ -65,6 +65,8 @@ interface ResumeData {
 }
 
 interface ResumeResponse {
+  id: string;
+  profile_id: string;
   version: number;
   resume: ResumeData;
   created_at: string;
@@ -72,18 +74,9 @@ interface ResumeResponse {
 }
 
 function scoreLabel(score: number): string {
-  if (score >= 80) {
-    return "Strong";
-  }
-
-  if (score >= 60) {
-    return "Positive";
-  }
-
-  if (score >= 40) {
-    return "Developing";
-  }
-
+  if (score >= 80) return "Strong";
+  if (score >= 60) return "Positive";
+  if (score >= 40) return "Developing";
   return "Limited";
 }
 
@@ -104,6 +97,12 @@ export default function ResumePage() {
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
+
+  const [buildingDecisionCard, setBuildingDecisionCard] =
+    useState(false);
+
+  const [decisionCardStatus, setDecisionCardStatus] =
+    useState("");
 
   useEffect(() => {
     async function loadResume() {
@@ -130,7 +129,8 @@ export default function ResumePage() {
 
         if (!response.ok) {
           throw new Error(
-            data.detail ?? "Unable to load Financial Resume.",
+            data.detail ??
+              "Unable to load Financial Resume.",
           );
         }
 
@@ -148,6 +148,57 @@ export default function ResumePage() {
 
     loadResume();
   }, []);
+
+  async function generateDecisionCard() {
+    setBuildingDecisionCard(true);
+    setDecisionCardStatus(
+      "Preparing your Decision Card...",
+    );
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        window.location.href = "/auth";
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/decision-card/generate`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail ??
+            "Unable to generate Decision Card.",
+        );
+      }
+
+      setDecisionCardStatus(
+        "Decision Card ready. Opening...",
+      );
+
+      window.location.href = "/decision-card";
+    } catch (err) {
+      setDecisionCardStatus(
+        err instanceof Error
+          ? err.message
+          : "Unable to generate Decision Card.",
+      );
+    } finally {
+      setBuildingDecisionCard(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -518,6 +569,35 @@ export default function ResumePage() {
               ),
             )}
           </div>
+        </section>
+
+        {/* Decision Card action */}
+
+        <section className="mt-6 rounded-3xl bg-white p-7 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900">
+            Ready for your final result?
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-gray-600">
+            Turn your Financial Resume into a concise Decision Card.
+          </p>
+
+          <button
+            type="button"
+            onClick={generateDecisionCard}
+            disabled={buildingDecisionCard}
+            className="mt-5 w-full rounded-xl bg-green-700 px-6 py-4 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {buildingDecisionCard
+              ? "Generating Decision Card..."
+              : "Generate My Decision Card →"}
+          </button>
+
+          {decisionCardStatus && (
+            <p className="mt-4 rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+              {decisionCardStatus}
+            </p>
+          )}
         </section>
 
         {/* Footer disclaimer */}

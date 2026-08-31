@@ -19,8 +19,9 @@ You must:
 2. Identify the document title when available.
 3. Extract only explicit facts visible in the document.
 4. Never invent missing information.
-5. Assess signs of possible editing, manipulation, or AI-generated content.
-6. Clearly distinguish uncertainty from suspicious indicators.
+5. Extract the person's/customer/borrower's name when it is explicitly visible.
+6. Assess signs of possible editing, manipulation, or AI-generated content.
+7. Clearly distinguish uncertainty from suspicious indicators.
 
 You are NOT performing legal or forensic authentication.
 
@@ -47,6 +48,7 @@ def get_gemini_client() -> genai.Client:
 def analyze_document(
     file_bytes: bytes,
     mime_type: str,
+    expected_profile_name: str | None = None,
 ) -> dict:
     settings = get_settings()
     client = get_gemini_client()
@@ -56,13 +58,34 @@ def analyze_document(
         mime_type=mime_type,
     )
 
-    prompt = """
+    expected_name_instruction = ""
+
+    if expected_profile_name:
+        expected_name_instruction = f"""
+AUTHENTICATED PROFILE CONTEXT:
+
+The authenticated TrustPulse borrower profile name is:
+"{expected_profile_name}"
+
+This name is provided only as comparison context.
+
+When analyzing the document:
+
+- Extract the document person's/customer/borrower's name ONLY if it is
+  explicitly visible in the document.
+- Do not replace the document's name with the authenticated profile name.
+- Do not assume the names match.
+- If the document visibly contains a different name, extract that different name.
+- If no person's/customer/borrower's name is visible, return null for facts.name.
+"""
+
+    prompt = f"""
 Analyze this document and return JSON using exactly this structure:
 
-{
+{{
   "document_type": string | null,
   "document_title": string | null,
-  "facts": {
+  "facts": {{
     "name": string | null,
     "date": string | null,
     "amount": number | null,
@@ -73,13 +96,15 @@ Analyze this document and return JSON using exactly this structure:
     "business_details": object | null,
     "income_details": object | null,
     "tax_details": object | null
-  },
-  "authenticity": {
+  }},
+  "authenticity": {{
     "status": "no_significant_indicators" | "potential_manipulation" | "inconclusive",
     "confidence": number,
     "indicators": [string]
-  }
-}
+  }}
+}}
+
+{expected_name_instruction}
 
 FACT EXTRACTION RULES:
 
@@ -89,6 +114,7 @@ FACT EXTRACTION RULES:
 - Preserve numeric amounts accurately.
 - Preserve dates as they appear when possible.
 - Do not infer facts that are not explicitly supported.
+- If a name is visible, extract the actual name shown on the document.
 
 AUTHENTICITY ASSESSMENT:
 
@@ -171,7 +197,9 @@ Do not return generic statements such as "the document looks real."
         ) from exc
 
     if not response.text:
-        raise RuntimeError("Gemini returned an empty response.")
+        raise RuntimeError(
+            "Gemini returned an empty response."
+        )
 
     try:
         return json.loads(response.text)

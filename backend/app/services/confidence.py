@@ -9,7 +9,10 @@ def clamp(
     minimum: float = 0.0,
     maximum: float = 100.0,
 ) -> float:
-    return max(minimum, min(maximum, value))
+    return max(
+        minimum,
+        min(maximum, value),
+    )
 
 
 def calculate_evidence_coverage(
@@ -22,7 +25,8 @@ def calculate_evidence_coverage(
     }
 
     coverage = (
-        len(dimensions) / TOTAL_DIMENSIONS
+        len(dimensions)
+        / TOTAL_DIMENSIONS
     ) * 100
 
     return clamp(coverage)
@@ -43,7 +47,10 @@ def average_signal_strength(
             strengths.append(
                 float(strength)
             )
-        except (TypeError, ValueError):
+        except (
+            TypeError,
+            ValueError,
+        ):
             continue
 
     if not strengths:
@@ -68,8 +75,13 @@ def calculate_authenticity_confidence(
             continue
 
         try:
-            values.append(float(value))
-        except (TypeError, ValueError):
+            values.append(
+                float(value)
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
             continue
 
     if not values:
@@ -86,7 +98,9 @@ def calculate_corroboration_score(
     if not validation_results:
         return 0.0
 
-    total = len(validation_results)
+    total = len(
+        validation_results
+    )
 
     corroborated = sum(
         1
@@ -101,7 +115,10 @@ def calculate_corroboration_score(
     )
 
     return clamp(
-        (corroborated / total) * 100
+        (
+            corroborated
+            / total
+        ) * 100
     )
 
 
@@ -114,6 +131,18 @@ def calculate_consistency_score(
     scores: list[float] = []
 
     for result in validation_results:
+        identity_status = result.get(
+            "identity_status"
+        )
+
+        # -----------------------------------------------------
+        # Strong identity mismatch is a major confidence issue.
+        # -----------------------------------------------------
+
+        if identity_status == "mismatch":
+            scores.append(10.0)
+            continue
+
         contradiction = bool(
             result.get(
                 "contradiction_detected",
@@ -126,10 +155,18 @@ def calculate_consistency_score(
             continue
 
         checks = [
-            result.get("name_consistency"),
-            result.get("date_consistency"),
-            result.get("amount_consistency"),
-            result.get("period_consistency"),
+            result.get(
+                "name_consistency"
+            ),
+            result.get(
+                "date_consistency"
+            ),
+            result.get(
+                "amount_consistency"
+            ),
+            result.get(
+                "period_consistency"
+            ),
         ]
 
         known_checks = [
@@ -149,8 +186,38 @@ def calculate_consistency_score(
         )
 
         scores.append(
-            (passed / len(known_checks)) * 100
+            (
+                passed
+                / len(known_checks)
+            ) * 100
         )
+
+    return clamp(
+        sum(scores) / len(scores)
+    )
+
+
+def calculate_identity_score(
+    validation_results: list[dict],
+) -> float:
+    if not validation_results:
+        return 50.0
+
+    scores: list[float] = []
+
+    for result in validation_results:
+        status = result.get(
+            "identity_status"
+        )
+
+        if status == "matched":
+            scores.append(100.0)
+
+        elif status == "mismatch":
+            scores.append(0.0)
+
+        else:
+            scores.append(50.0)
 
     return clamp(
         sum(scores) / len(scores)
@@ -170,10 +237,8 @@ def calculate_confidence(
         signals
     )
 
-    authenticity = (
-        calculate_authenticity_confidence(
-            validation_results
-        )
+    authenticity = calculate_authenticity_confidence(
+        validation_results
     )
 
     corroboration = calculate_corroboration_score(
@@ -184,12 +249,18 @@ def calculate_confidence(
         validation_results
     )
 
+    identity = calculate_identity_score(
+        validation_results
+    )
+
+    # Identity is now explicitly represented in confidence.
     confidence = (
-        (coverage * 0.25)
-        + (signal_strength * 0.25)
-        + (authenticity * 0.20)
+        (coverage * 0.20)
+        + (signal_strength * 0.20)
+        + (authenticity * 0.15)
         + (corroboration * 0.15)
         + (consistency * 0.15)
+        + (identity * 0.15)
     )
 
     confidence = round(
@@ -218,6 +289,10 @@ def calculate_confidence(
             ),
             "consistency": round(
                 consistency,
+                2,
+            ),
+            "identity_consistency": round(
+                identity,
                 2,
             ),
         },

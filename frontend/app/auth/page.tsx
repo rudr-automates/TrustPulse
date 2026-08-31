@@ -1,47 +1,80 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+
 import { supabase } from "../../src/lib/supabase";
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"login" | "signup">("login");
+
+  const [mode, setMode] = useState<"login" | "signup">(
+    "login",
+  );
+
   const [message, setMessage] = useState("");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("Please wait...");
+  const [loading, setLoading] = useState(false);
 
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      if (mode === "signup") {
+        const {
+          data,
+          error,
+        } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        // If Supabase returns a session immediately,
+        // continue directly to the identity step.
+        if (data.session) {
+          window.location.href = "/identity";
+          return;
+        }
+
+        // This happens when email confirmation is enabled.
+        setMessage(
+          "Account created. Check your email to confirm your account, then sign in.",
+        );
+
+        setMode("login");
+        return;
+      }
+
+      const {
+        error,
+      } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        setMessage(error.message);
-        return;
+        throw error;
       }
 
+      window.location.href = "/identity";
+    } catch (error) {
       setMessage(
-        "Account created. You can now continue to your Financial Identity.",
+        error instanceof Error
+          ? error.message
+          : "Something went wrong.",
       );
-
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    window.location.href = "/identity";
   }
 
   return (
@@ -67,21 +100,23 @@ export default function AuthPage() {
             className="mt-8 space-y-5"
           >
             <div>
-              <label className="mb-2 block text-sm font-medium">
+              <label className="mb-2 block text-sm font-medium text-gray-800">
                 Email
               </label>
 
               <input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
                 required
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-green-600"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">
+              <label className="mb-2 block text-sm font-medium text-gray-800">
                 Password
               </label>
 
@@ -93,15 +128,20 @@ export default function AuthPage() {
                 }
                 required
                 minLength={6}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none focus:border-green-600"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-green-600"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full rounded-xl bg-green-700 px-6 py-3 font-semibold text-white hover:bg-green-800"
+              disabled={loading}
+              className="w-full rounded-xl bg-green-700 px-6 py-3 font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {mode === "login" ? "Sign In" : "Create Account"}
+              {loading
+                ? "Please wait..."
+                : mode === "login"
+                  ? "Sign In"
+                  : "Create Account"}
             </button>
           </form>
 
@@ -113,9 +153,14 @@ export default function AuthPage() {
 
           <button
             type="button"
-            onClick={() =>
-              setMode(mode === "login" ? "signup" : "login")
-            }
+            onClick={() => {
+              setMode(
+                mode === "login"
+                  ? "signup"
+                  : "login",
+              );
+              setMessage("");
+            }}
             className="mt-5 text-sm font-medium text-green-700"
           >
             {mode === "login"

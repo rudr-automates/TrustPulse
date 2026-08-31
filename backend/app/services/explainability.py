@@ -9,14 +9,18 @@ DIMENSION_LABELS = {
 }
 
 
-def dimension_label(dimension: str) -> str:
+def dimension_label(
+    dimension: str,
+) -> str:
     return DIMENSION_LABELS.get(
         dimension,
         dimension.replace("_", " ").title(),
     )
 
 
-def unique_strings(values: list[str]) -> list[str]:
+def unique_strings(
+    values: list[str],
+) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
 
@@ -69,15 +73,18 @@ def build_positive_indicators(
             "evidence_ids",
             [],
         ):
-            corroboration_count = corroboration_by_evidence.get(
-                evidence_id,
-                0,
+            corroboration_count = (
+                corroboration_by_evidence.get(
+                    evidence_id,
+                    0,
+                )
             )
 
             if corroboration_count > 0:
                 indicators.append(
                     f"{corroboration_count} additional record(s) "
-                    f"provide corroborating support for the {label.lower()} evidence."
+                    f"provide corroborating support for "
+                    f"the {label.lower()} evidence."
                 )
 
     return unique_strings(indicators)
@@ -94,7 +101,10 @@ def build_uncertainties(
     # Missing dimensions
     # ---------------------------------------------------------
 
-    all_dimensions = set(DIMENSION_LABELS.keys())
+    all_dimensions = set(
+        DIMENSION_LABELS.keys()
+    )
+
     missing_dimensions = [
         dimension
         for dimension in all_dimensions
@@ -114,21 +124,60 @@ def build_uncertainties(
     # ---------------------------------------------------------
 
     for validation in validation_results:
+
+        # -----------------------------------------------------
+        # Identity mismatch
+        #
+        # We support both:
+        #   1. the newer identity_status field
+        #   2. the persisted name_consistency field
+        #
+        # This means existing validation rows created before
+        # identity_status was introduced still work correctly.
+        # -----------------------------------------------------
+
+        identity_mismatch = (
+            validation.get("identity_status")
+            == "mismatch"
+            or validation.get("name_consistency")
+            is False
+        )
+
+        if identity_mismatch:
+            uncertainties.append(
+                "One or more submitted documents show a name "
+                "that does not match the authenticated borrower profile."
+            )
+
+        # -----------------------------------------------------
+        # Authenticity
+        # -----------------------------------------------------
+
         authenticity_status = validation.get(
             "authenticity_status"
         )
 
-        if authenticity_status == "potential_manipulation":
+        if (
+            authenticity_status
+            == "potential_manipulation"
+        ):
             uncertainties.append(
                 "Potential manipulation indicators were identified "
                 "in one or more submitted documents."
             )
 
-        elif authenticity_status == "inconclusive":
+        elif (
+            authenticity_status
+            == "inconclusive"
+        ):
             uncertainties.append(
                 "The authenticity of one or more submitted documents "
                 "could not be determined confidently."
             )
+
+        # -----------------------------------------------------
+        # General consistency
+        # -----------------------------------------------------
 
         if validation.get(
             "contradiction_detected"
@@ -137,6 +186,10 @@ def build_uncertainties(
                 "One or more consistency checks identified conflicting "
                 "or anomalous information."
             )
+
+        # -----------------------------------------------------
+        # Missing information
+        # -----------------------------------------------------
 
         missing_fields = validation.get(
             "missing_fields"
@@ -148,7 +201,9 @@ def build_uncertainties(
                 "submitted documents."
             )
 
-    return unique_strings(uncertainties)
+    return unique_strings(
+        uncertainties
+    )
 
 
 def build_explanation(
@@ -194,14 +249,17 @@ def build_explanation(
     if uncertainties:
         explanation_parts.append(
             "Confidence remains limited by evidence coverage, "
-            "quality, consistency, or authenticity uncertainty."
+            "identity consistency, quality, consistency, "
+            "or authenticity uncertainty."
         )
     else:
         explanation_parts.append(
             "No major uncertainty was identified in the current assessment."
         )
 
-    return " ".join(explanation_parts)
+    return " ".join(
+        explanation_parts
+    )
 
 
 def build_explanation_package(
@@ -217,27 +275,41 @@ def build_explanation_package(
         dimension_scores.keys()
     )
 
-    positive_indicators = build_positive_indicators(
-        signals=signals,
-        corroboration_by_evidence=corroboration_by_evidence,
+    positive_indicators = (
+        build_positive_indicators(
+            signals=signals,
+            corroboration_by_evidence=(
+                corroboration_by_evidence
+            ),
+        )
     )
 
     uncertainties = build_uncertainties(
         signals=signals,
-        validation_results=validation_results,
-        available_dimensions=available_dimensions,
+        validation_results=(
+            validation_results
+        ),
+        available_dimensions=(
+            available_dimensions
+        ),
     )
 
     explanation = build_explanation(
         trust_score=trust_score,
         confidence_score=confidence_score,
-        dimension_scores=dimension_scores,
-        positive_indicators=positive_indicators,
+        dimension_scores=(
+            dimension_scores
+        ),
+        positive_indicators=(
+            positive_indicators
+        ),
         uncertainties=uncertainties,
     )
 
     return {
-        "positive_indicators": positive_indicators,
+        "positive_indicators": (
+            positive_indicators
+        ),
         "uncertainties": uncertainties,
         "explanation": explanation,
     }

@@ -4,7 +4,9 @@ from datetime import date, datetime
 from backend.app.schemas.analysis import EvidenceAnalysisResult
 
 
-def normalize_text(value: str | None) -> str:
+def normalize_text(
+    value: str | None,
+) -> str:
     if not value:
         return ""
 
@@ -49,6 +51,18 @@ def names_consistent(
             len(extracted_tokens),
         ),
     )
+
+
+def identity_status(
+    name_consistency: bool | None,
+) -> str:
+    if name_consistency is True:
+        return "matched"
+
+    if name_consistency is False:
+        return "mismatch"
+
+    return "not_available"
 
 
 def date_is_sane(
@@ -148,7 +162,10 @@ def normalize_authenticity(
 
     confidence = max(
         0.0,
-        min(100.0, float(confidence)),
+        min(
+            100.0,
+            float(confidence),
+        ),
     )
 
     cleaned_indicators = [
@@ -189,6 +206,10 @@ def validate_analysis(
         analysis.facts.name,
     )
 
+    identity = identity_status(
+        name_consistency
+    )
+
     date_consistency = date_is_sane(
         analysis.facts.date,
     )
@@ -202,19 +223,11 @@ def validate_analysis(
         analysis,
     )
 
-    # ---------------------------------------------------------
-    # IMPORTANT:
-    # These are actual financial/document consistency
-    # problems only.
-    #
-    # Authenticity concerns are handled separately below.
-    # ---------------------------------------------------------
-
     contradictions: list[str] = []
 
-    if name_consistency is False:
+    if identity == "mismatch":
         contradictions.append(
-            "The document name does not sufficiently match the borrower profile name."
+            "The document name does not match the authenticated borrower profile."
         )
 
     if date_consistency is False:
@@ -227,14 +240,9 @@ def validate_analysis(
             "The extracted amount is invalid."
         )
 
-    contradiction_detected = (
-        len(contradictions) > 0
+    contradiction_detected = bool(
+        contradictions
     )
-
-    # ---------------------------------------------------------
-    # Authenticity is a separate dimension.
-    # It must NOT automatically become a contradiction.
-    # ---------------------------------------------------------
 
     (
         authenticity_status,
@@ -247,6 +255,21 @@ def validate_analysis(
     )
 
     notes: list[str] = []
+
+    if identity == "matched":
+        notes.append(
+            "The document name matches the authenticated borrower profile."
+        )
+
+    elif identity == "mismatch":
+        notes.append(
+            "The document name does not match the authenticated borrower profile."
+        )
+
+    else:
+        notes.append(
+            "A borrower name was not available for deterministic identity comparison."
+        )
 
     if missing_fields:
         notes.append(
@@ -274,6 +297,7 @@ def validate_analysis(
 
     return {
         "name_consistency": name_consistency,
+        "identity_status": identity,
         "date_consistency": date_consistency,
         "amount_consistency": amount_consistency,
         "period_consistency": None,

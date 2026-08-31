@@ -16,7 +16,7 @@ export default function HomePage() {
               </h1>
             </div>
 
-            <div className="rounded-full border border-gray-200 px-4 py-2 text-sm">
+            <div className="rounded-full border border-gray-200 px-4 py-2 text-sm text-gray-700">
               English · हिंदी
             </div>
           </div>
@@ -28,10 +28,10 @@ export default function HomePage() {
             </p>
 
             <Link
-              href="/identity"
+              href="/auth"
               className="mt-8 inline-flex rounded-xl bg-green-700 px-6 py-3 font-semibold text-white transition hover:bg-green-800"
             >
-              Create Your Financial Identity →
+              Get Started →
             </Link>
           </div>
         </div>

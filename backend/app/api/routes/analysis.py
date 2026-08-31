@@ -25,11 +25,18 @@ def analyze_evidence(
     settings = get_settings()
     supabase = get_supabase_client()
 
+    # ---------------------------------------------------------
+    # 1. Get authenticated user's profile
+    # ---------------------------------------------------------
+
     profile_result = (
         supabase
         .table("profiles")
         .select("*")
-        .eq("auth_user_id", str(user.id))
+        .eq(
+            "auth_user_id",
+            str(user.id),
+        )
         .limit(1)
         .execute()
     )
@@ -43,12 +50,22 @@ def analyze_evidence(
     profile = profile_result.data[0]
     profile_id = profile["id"]
 
+    # ---------------------------------------------------------
+    # 2. Get evidence belonging to this profile ONLY
+    # ---------------------------------------------------------
+
     evidence_result = (
         supabase
         .table("evidence")
         .select("*")
-        .eq("id", evidence_id)
-        .eq("profile_id", profile_id)
+        .eq(
+            "id",
+            evidence_id,
+        )
+        .eq(
+            "profile_id",
+            profile_id,
+        )
         .limit(1)
         .execute()
     )
@@ -61,12 +78,18 @@ def analyze_evidence(
 
     evidence = evidence_result.data[0]
 
+    # ---------------------------------------------------------
+    # 3. Download document
+    # ---------------------------------------------------------
+
     try:
         file_bytes = (
             supabase
             .storage
             .from_(settings.storage_bucket)
-            .download(evidence["storage_path"])
+            .download(
+                evidence["storage_path"]
+            )
         )
     except Exception as exc:
         raise HTTPException(
@@ -74,10 +97,15 @@ def analyze_evidence(
             detail="Evidence file could not be retrieved.",
         ) from exc
 
+    # ---------------------------------------------------------
+    # 4. AI analysis with authenticated profile context
+    # ---------------------------------------------------------
+
     try:
         raw_analysis = analyze_document(
             file_bytes=file_bytes,
             mime_type=evidence["mime_type"],
+            expected_profile_name=profile["full_name"],
         )
 
         analysis = EvidenceAnalysisResult.model_validate(
@@ -88,7 +116,9 @@ def analyze_evidence(
         raise HTTPException(
             status_code=502,
             detail={
-                "message": "Gemini returned data that failed validation.",
+                "message": (
+                    "Gemini returned data that failed validation."
+                ),
                 "errors": exc.errors(),
             },
         ) from exc
@@ -99,11 +129,19 @@ def analyze_evidence(
             detail=f"Document analysis failed: {exc}",
         ) from exc
 
+    # ---------------------------------------------------------
+    # 5. Deterministic validation against authenticated profile
+    # ---------------------------------------------------------
+
     validation = validate_analysis(
         profile_name=profile["full_name"],
         category=evidence["category"],
         analysis=analysis,
     )
+
+    # ---------------------------------------------------------
+    # 6. Determine evidence status
+    # ---------------------------------------------------------
 
     evidence_status = "documented"
 
@@ -113,82 +151,118 @@ def analyze_evidence(
     }:
         evidence_status = "under_review"
 
+    if validation["identity_status"] == "mismatch":
+        evidence_status = "under_review"
+
     if validation["contradiction_detected"]:
         evidence_status = "under_review"
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(
+        timezone.utc
+    ).isoformat()
+
+    # ---------------------------------------------------------
+    # 7. Persist extracted facts
+    # ---------------------------------------------------------
 
     try:
-        supabase.table("extracted_facts").upsert(
-            {
-                "evidence_id": evidence_id,
-                "document_type": analysis.document_type,
-                "document_title": analysis.document_title,
-                "extracted_data": analysis.facts.model_dump(),
-                "extraction_confidence": analysis.authenticity.confidence,
-                "ai_model": settings.ai_model,
-                "updated_at": now,
-            },
-            on_conflict="evidence_id",
-        ).execute()
+        (
+            supabase
+            .table("extracted_facts")
+            .upsert(
+                {
+                    "evidence_id": evidence_id,
+                    "document_type": analysis.document_type,
+                    "document_title": analysis.document_title,
+                    "extracted_data": analysis.facts.model_dump(),
+                    "extraction_confidence": (
+                        analysis.authenticity.confidence
+                    ),
+                    "ai_model": settings.ai_model,
+                    "updated_at": now,
+                },
+                on_conflict="evidence_id",
+            )
+            .execute()
+        )
 
-        supabase.table("validation_results").upsert(
-            {
-                "evidence_id": evidence_id,
-                "document_quality": None,
-                "name_consistency": validation[
-                    "name_consistency"
-                ],
-                "date_consistency": validation[
-                    "date_consistency"
-                ],
-                "amount_consistency": validation[
-                    "amount_consistency"
-                ],
-                "period_consistency": validation[
-                    "period_consistency"
-                ],
-                "missing_fields": validation[
-                    "missing_fields"
-                ],
-                "duplicate_detected": validation[
-                    "duplicate_detected"
-                ],
-                "contradiction_detected": validation[
-                    "contradiction_detected"
-                ],
-                "corroboration_count": validation[
-                    "corroboration_count"
-                ],
-                "validation_notes": validation[
-                    "validation_notes"
-                ],
-                "authenticity_status": validation[
-                    "authenticity_status"
-                ],
-                "manipulation_indicators": validation[
-                    "manipulation_indicators"
-                ],
-                "authenticity_confidence": validation[
-                    "authenticity_confidence"
-                ],
-                "updated_at": now,
-            },
-            on_conflict="evidence_id",
-        ).execute()
+        # -----------------------------------------------------
+        # 8. Persist validation result
+        # -----------------------------------------------------
 
-        supabase.table("evidence").update(
-            {
-                "status": evidence_status,
-                "analyzed_at": now,
-            }
-        ).eq(
-            "id",
-            evidence_id,
-        ).eq(
-            "profile_id",
-            profile_id,
-        ).execute()
+        (
+            supabase
+            .table("validation_results")
+            .upsert(
+                {
+                    "evidence_id": evidence_id,
+                    "document_quality": None,
+                    "name_consistency": validation[
+                        "name_consistency"
+                    ],
+                    "date_consistency": validation[
+                        "date_consistency"
+                    ],
+                    "amount_consistency": validation[
+                        "amount_consistency"
+                    ],
+                    "period_consistency": validation[
+                        "period_consistency"
+                    ],
+                    "missing_fields": validation[
+                        "missing_fields"
+                    ],
+                    "duplicate_detected": validation[
+                        "duplicate_detected"
+                    ],
+                    "contradiction_detected": validation[
+                        "contradiction_detected"
+                    ],
+                    "corroboration_count": validation[
+                        "corroboration_count"
+                    ],
+                    "validation_notes": validation[
+                        "validation_notes"
+                    ],
+                    "authenticity_status": validation[
+                        "authenticity_status"
+                    ],
+                    "manipulation_indicators": validation[
+                        "manipulation_indicators"
+                    ],
+                    "authenticity_confidence": validation[
+                        "authenticity_confidence"
+                    ],
+                    "updated_at": now,
+                },
+                on_conflict="evidence_id",
+            )
+            .execute()
+        )
+
+        # -----------------------------------------------------
+        # 9. Update evidence status
+        # -----------------------------------------------------
+
+        (
+            supabase
+            .table("evidence")
+            .update(
+                {
+                    "status": evidence_status,
+                    "analyzed_at": now,
+                }
+            )
+            .eq(
+                "id",
+                evidence_id,
+            )
+            .eq(
+                "profile_id",
+                profile_id,
+            )
+            .execute()
+        )
 
     except Exception as exc:
         raise HTTPException(
